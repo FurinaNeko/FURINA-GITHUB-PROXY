@@ -101,7 +101,7 @@ def main(argv=None) -> int:
     parser.add_argument("--repo", default="FURINA-GITHUB-PROXY")
     parser.add_argument("--branch", default="main")
     parser.add_argument("--release", default="dist/FURINA-GITHUB-PROXY-Setup.exe")
-    parser.add_argument("--tag", default="v1.0.0")
+    parser.add_argument("--tag", default="v1.1.0")
     parser.add_argument("--skip-release", action="store_true")
     args = parser.parse_args(argv)
 

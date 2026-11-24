@@ -57,6 +57,6 @@ exe = EXE(
     console=False,          # 图形安装器，不要黑框
     disable_windowed_traceback=False,
     icon=str(ICON),
-    version=None,
+    version=str(ROOT / "tools" / "version_setup.txt"),
     uac_admin=False,        # 按用户安装，不弹 UAC
 )

@@ -26,7 +26,7 @@ from pathlib import Path
 
 APP_NAME = "FURINA-GITHUB-PROXY"
 EXE_NAME = "FURINA-GITHUB-PROXY.exe"
-DEFAULT_VERSION = "1.0.0"
+DEFAULT_VERSION = "1.1.0"
 AUTHOR_QQ = "2252296536"
 GITHUB_URL = "https://github.com/FurinaNeko/FURINA-GITHUB-PROXY"
 GITHUB_USER = "https://github.com/FurinaNeko"
@@ -67,7 +67,7 @@ TEMPLATE_CONFIG = {
     "dns": {"mode": "doh", "doh_url": "https://dns.alidns.com/dns-query",
             "cache_ttl": 300, "timeout": 3},
     "timeouts": {"connect": 8, "handshake": 10, "idle": 300},
-    "health": {"interval": 30, "timeout": 4, "fail_threshold": 2, "cooldown": 20},
+    "health": {"interval": 30, "timeout": 4, "fail_threshold": 1, "cooldown": 60},
     "accelerator": {
         "enabled": False, "mode": "mitm", "host": "127.0.0.1", "port": 443,
         "ca_dir": "certs", "upstream_verify": True, "upstream_port": 443,

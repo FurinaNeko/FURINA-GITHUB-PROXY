@@ -789,16 +789,20 @@ class App:
                 await asyncio.gather(
                     *(u.probe() for u in router.upstreams.values()),
                     return_exceptions=True)
-                # 单点超时说明不了问题：按“最可能通”的顺序试几个，第一个通就算通过
-                errors = []
-                for host in ("raw.githubusercontent.com", "api.github.com",
-                             "github.com"):
-                    res = await _verify(router, host, 443, timeout=10)
+                # 三个目标并发测，谁先通就算通过：单个站点卡住不再拖累整体
+                hosts = ("raw.githubusercontent.com", "api.github.com", "github.com")
+                results = await asyncio.gather(
+                    *(_verify(router, h, 443, timeout=10) for h in hosts),
+                    return_exceptions=True)
+                clean = [r for r in results if isinstance(r, dict)]
+                for res in clean:
                     if res.get("ok"):
-                        res["tried"] = errors
+                        res["tried"] = [f"{r['host']}: {r.get('error') or '-'}"
+                                        for r in clean if not r.get("ok")]
                         return res
-                    errors.append(f"{host}: {res.get('error') or '-'}")
-                return {"ok": False, "error": " | ".join(errors)}
+                errors = [f"{r.get('host')}: {r.get('error') or '-'}" for r in clean]
+                return {"ok": False,
+                        "error": " | ".join(errors) or "全部目标均无响应"}
 
             try:
                 # 首次连接要等 DoH / 占位上游失败，30s 不够，放宽到 120s

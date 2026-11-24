@@ -30,7 +30,7 @@ DEFAULTS: dict[str, Any] = {
     "dns": {"mode": "system", "doh_url": "https://dns.alidns.com/dns-query",
             "cache_ttl": 300, "timeout": 5},
     "timeouts": {"connect": 8, "handshake": 10, "idle": 300},
-    "health": {"interval": 30, "timeout": 4, "fail_threshold": 2, "cooldown": 20},
+    "health": {"interval": 30, "timeout": 4, "fail_threshold": 1, "cooldown": 60},
     "ui": {"language": "en"},
     "accelerator": {
         "enabled": False,
@@ -397,7 +397,7 @@ EXAMPLE_CONFIG: dict[str, Any] = {
     "dns": {"mode": "doh", "doh_url": "https://dns.alidns.com/dns-query",
             "cache_ttl": 300, "timeout": 5},
     "timeouts": {"connect": 8, "handshake": 10, "idle": 300},
-    "health": {"interval": 30, "timeout": 4, "fail_threshold": 2, "cooldown": 20},
+    "health": {"interval": 30, "timeout": 4, "fail_threshold": 1, "cooldown": 60},
     "upstreams": [
         {"name": "direct", "type": "direct"},
         {"name": "http-node", "type": "http", "server": "127.0.0.1", "port": 10809,

@@ -157,13 +157,19 @@ async def _verify(router: Router, host: str, port: int,
                 "error": str(exc) or type(exc).__name__, "ms": 0.0, "status": ""}
     try:
         ctx = ssl.create_default_context()
-        await asyncio.wait_for(writer.start_tls(ctx, server_hostname=host), timeout)
+        try:
+            await asyncio.wait_for(writer.start_tls(ctx, server_hostname=host), timeout)
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"TLS 握手超时（{timeout:.0f}s）") from None
         writer.write(
             f"HEAD / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: localproxy-check/1.0\r\n"
             "Accept: */*\r\nConnection: close\r\n\r\n".encode()
         )
         await writer.drain()
-        head, _ = await asyncio.wait_for(read_head(reader, 32768), timeout)
+        try:
+            head, _ = await asyncio.wait_for(read_head(reader, 32768), timeout)
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"等待响应头超时（{timeout:.0f}s）") from None
         status = head.split(b"\r\n", 1)[0].decode("latin-1", "replace").strip()
         return {
             "host": host,
@@ -256,7 +262,10 @@ async def _probe_through(proxy_port: int, host: str, port: int, kind: str) -> st
             "Connection: close\r\n\r\n".encode()
         )
         await writer.drain()
-        head, _ = await asyncio.wait_for(read_head(reader, 32768), timeout)
+        try:
+            head, _ = await asyncio.wait_for(read_head(reader, 32768), timeout)
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"等待响应头超时（{timeout:.0f}s）") from None
         return head.split(b"\r\n", 1)[0].decode("latin-1", "replace").strip()
     finally:
         try:
@@ -293,7 +302,7 @@ def cmd_gen_config(args) -> int:
         "dns": {"mode": "doh", "doh_url": "https://dns.alidns.com/dns-query",
                 "cache_ttl": 300, "timeout": 5},
         "timeouts": {"connect": 8, "handshake": 10, "idle": 300},
-        "health": {"interval": 30, "timeout": 4, "fail_threshold": 2, "cooldown": 20},
+        "health": {"interval": 30, "timeout": 4, "fail_threshold": 1, "cooldown": 60},
         "accelerator": {
             "enabled": False,
             "mode": "mitm",

@@ -60,6 +60,11 @@ class Router:
         if policy is None:
             policy = await self.decide(host, port)
         cands = self.candidates(policy)
+        # 刚失败过、还在冷却期的上游先跳过：否则占位节点会把每次连接都拖到超时
+        now = time.monotonic()
+        warm = [u for u in cands if u.blocked_until <= now]
+        if warm:
+            cands = warm
         errors: list[str] = []
         for up in cands:
             try:

@@ -57,5 +57,5 @@ exe = EXE(
     console=True,
     disable_windowed_traceback=False,
     icon=str(ICON),
-    version=None,
+    version=str(ROOT / "tools" / "version_app.txt"),
 )
