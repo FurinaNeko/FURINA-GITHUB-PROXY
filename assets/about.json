@@ -1,7 +1,7 @@
 {
   "name": "FURINA-GITHUB-PROXY",
   "display_name": "FURINA-GITHUB-PROXY",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "tagline": "本地 SOCKS5 / HTTP 代理 · GitHub 与 HuggingFace 加速",
   "author": "FurinaNeko",
   "author_qq": "2252296536",

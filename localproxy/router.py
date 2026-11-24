@@ -68,7 +68,9 @@ class Router:
         errors: list[str] = []
         for up in cands:
             try:
+                started = time.monotonic()
                 reader, writer = await up.connect(host, port)
+                up.record_connect(time.monotonic() - started)
                 up.connects += 1
                 up.mark_success()
                 return reader, writer, policy, up
@@ -115,11 +117,11 @@ def _order(members: list[Upstream], kind: str) -> list[Upstream]:
 
     if kind == "fallback":
         return sorted(members, key=lambda u: (0 if healthy(u) else 1, members.index(u)))
-    return sorted(
-        members,
-        key=lambda u: (
-            0 if healthy(u) else 1,
-            u.latency if u.latency is not None else 999.0,
-            members.index(u),
-        ),
-    )
+
+    def key(up: Upstream):
+        # 冷却中 > 最近失败 > 实际建连耗时（没有就用探测延迟）> 配置顺序
+        lat = up.ewma if up.ewma is not None else (
+            up.latency if up.latency is not None else 9.9)
+        return (0 if healthy(up) else 1, 1 if up.fails else 0, lat, members.index(up))
+
+    return sorted(members, key=key)

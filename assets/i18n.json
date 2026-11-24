@@ -112,7 +112,11 @@
       "lat_hint": "TCP + TLS handshake, min of 3 samples",
       "lat_running": "testing…",
       "lat_ok": "ok",
-      "lat_fail": "failed"
+      "lat_fail": "failed",
+      "daemon_on": "Background: on",
+      "daemon_off": "Background: off",
+      "daemon_started": "Background proxy started (PID {pid}, port {port})",
+      "daemon_stopped": "Background proxy stopped (PID {pid})"
     },
     "zh-CN": {
       "title": "FURINA-GITHUB-PROXY",
@@ -208,7 +212,11 @@
       "lat_hint": "TCP + TLS 握手，取 3 次最小值",
       "lat_running": "检测中…",
       "lat_ok": "正常",
-      "lat_fail": "失败"
+      "lat_fail": "失败",
+      "daemon_on": "后台常驻：开",
+      "daemon_off": "后台常驻：关",
+      "daemon_started": "后台代理已启动（PID {pid}，端口 {port}）",
+      "daemon_stopped": "后台代理已停止（PID {pid}）"
     },
     "ja": {
       "title": "FURINA-GITHUB-PROXY",
@@ -304,7 +312,11 @@
       "lat_hint": "TCP + TLS ハンドシェイク（3 回の最小値）",
       "lat_running": "測定中…",
       "lat_ok": "正常",
-      "lat_fail": "失敗"
+      "lat_fail": "失敗",
+      "daemon_on": "常駐: オン",
+      "daemon_off": "常駐: オフ",
+      "daemon_started": "常駐プロキシ起動（PID {pid} / ポート {port}）",
+      "daemon_stopped": "常駐プロキシ停止（PID {pid}）"
     },
     "ru": {
       "title": "FURINA-GITHUB-PROXY",
@@ -400,7 +412,11 @@
       "lat_hint": "TCP + TLS, минимум из 3 попыток",
       "lat_running": "измерение…",
       "lat_ok": "ок",
-      "lat_fail": "ошибка"
+      "lat_fail": "ошибка",
+      "daemon_on": "Фон: вкл",
+      "daemon_off": "Фон: выкл",
+      "daemon_started": "Фоновый прокси запущен (PID {pid}, порт {port})",
+      "daemon_stopped": "Фоновый прокси остановлен (PID {pid})"
     }
   },
   "installer": {

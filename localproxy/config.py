@@ -409,7 +409,7 @@ EXAMPLE_CONFIG: dict[str, Any] = {
          "tls": {"sni": "NODE_SNI", "insecure": False, "alpn": ["http/1.1"]}},
     ],
     "groups": {
-        "PROXY": {"type": "latency", "members": ["trojan-node", "socks-node", "http-node"]},
+        "PROXY": {"type": "latency", "members": ["direct", "trojan-node", "socks-node", "http-node"]},
         "STABLE": {"type": "fallback", "members": ["trojan-node", "socks-node"]},
     },
     "rules": [

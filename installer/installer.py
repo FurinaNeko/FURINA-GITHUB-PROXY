@@ -26,7 +26,7 @@ from pathlib import Path
 
 APP_NAME = "FURINA-GITHUB-PROXY"
 EXE_NAME = "FURINA-GITHUB-PROXY.exe"
-DEFAULT_VERSION = "1.1.0"
+DEFAULT_VERSION = "1.1.2"
 AUTHOR_QQ = "2252296536"
 GITHUB_URL = "https://github.com/FurinaNeko/FURINA-GITHUB-PROXY"
 GITHUB_USER = "https://github.com/FurinaNeko"
@@ -79,7 +79,7 @@ TEMPLATE_CONFIG = {
         {"name": "http-local", "type": "http", "server": "127.0.0.1", "port": 10809},
     ],
     "groups": {
-        "PROXY": {"type": "latency", "members": ["socks-local", "http-local", "direct"]},
+        "PROXY": {"type": "latency", "members": ["direct", "socks-local", "http-local"]},
     },
     "rules": [
         "DOMAIN-SUFFIX,github.com,PROXY",
@@ -284,11 +284,18 @@ class Installer:
             folder.mkdir(parents=True, exist_ok=True)
             lnk = folder / f"{title}.lnk"
             try:
-                _make_lnk(lnk, target=self.exe, args="run -c config.json",
+                # 不带参数 = 直接打开图形界面（CLI 才需要 run/daemon 参数）
+                _make_lnk(lnk, target=self.exe, args="",
                           workdir=self.target,
                           icon=self.target / "assets" / "app.ico",
-                          description=f"{title} · local SOCKS5/HTTP proxy")
+                          description=f"{title} · 图形界面")
                 self.log(f"shortcut: {lnk}")
+                daemon_lnk = folder / f"{title} (后台常驻).lnk"
+                _make_lnk(daemon_lnk, target=self.exe,
+                          args="daemon start -c config.json", workdir=self.target,
+                          icon=self.target / "assets" / "app.ico",
+                          description=f"{title} · 后台常驻（无窗口）")
+                self.log(f"shortcut: {daemon_lnk}")
             except Exception as exc:  # noqa: BLE001
                 self.log(f"shortcut failed ({lnk}): {exc}")
 

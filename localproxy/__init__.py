@@ -4,6 +4,6 @@
 按规则送到可用的上游链路（HTTP 代理、SOCKS5、Trojan over TLS），其余流量直连。
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.2"
 
 NAME = "localproxy"

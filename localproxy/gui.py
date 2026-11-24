@@ -167,6 +167,11 @@ class App:
         self._refresh_all()
         self.root.after(400, self._pump_logs)
         self.root.after(1200, self._poll_stats)
+        self.root.after(1500, self._poll_daemon)
+
+    def _poll_daemon(self):
+        self._refresh_daemon()
+        self.root.after(4000, self._poll_daemon)
         if smoke_shot:
             self.root.after(600, lambda: self._select_tab(smoke_tab))
             if smoke_tab == 1:
@@ -283,6 +288,9 @@ class App:
         self.btn_check.pack(side="left", padx=4)
         self.btn_cfg = ttk.Button(bar, text=tr("open_config"), command=self.open_config)
         self.btn_cfg.pack(side="left", padx=4)
+        self.daemon_btn = ttk.Button(bar, text=tr("daemon_off"),
+                                     command=self.toggle_daemon)
+        self.daemon_btn.pack(side="left", padx=4)
 
 
         footer = ttk.Frame(self.root)
@@ -757,6 +765,32 @@ class App:
         ok, msg = apply_system_proxy(f"127.0.0.1:{port}", not bool(enable))
         self._say(msg, 5000)
         logging.getLogger("localproxy").info("system proxy: %s", msg)
+
+    def toggle_daemon(self):
+        """一键在后台常驻（无窗口）与停止之间切换。"""
+        from . import daemon
+
+        st = daemon.status()
+        if st.get("running"):
+            out = daemon.stop()
+            self._say(self.tr("daemon_stopped", pid=out.get("pid") or "-"), 8000)
+        else:
+            info = daemon.start(str(self.cfg_path))
+            self._say(self.tr("daemon_started", pid=info.get("pid"),
+                              port=info.get("socks5_port")), 9000)
+        self._refresh_daemon()
+
+    def _refresh_daemon(self):
+        from . import daemon
+
+        try:
+            running = bool(daemon.status().get("running"))
+        except Exception:  # noqa: BLE001
+            running = False
+        btn = getattr(self, "daemon_btn", None)
+        if btn is not None:
+            btn.config(text=self.tr("daemon_on") if running
+                       else self.tr("daemon_off"))
 
     def copy_proxy(self):
         port = self.ports.get("http") or self.cfg.http.port

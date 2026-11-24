@@ -43,7 +43,8 @@ class Upstream:
         self.cfg = cfg
         # 健康状态
         self.healthy = True
-        self.latency: float | None = None
+        self.latency: float | None = None      # 健康探测得到的延迟
+        self.ewma: float | None = None         # 真实建连耗时（拨号时统计）
         self.fails = 0
         self.checks = 0
         self.blocked_until = 0.0
@@ -62,6 +63,7 @@ class Upstream:
             "address": self.spec.masked(),
             "healthy": self.healthy,
             "latency_ms": round(self.latency * 1000, 1) if self.latency else None,
+            "ewma_ms": round(self.ewma * 1000, 1) if self.ewma else None,
             "fails": self.fails,
             "checks": self.checks,
             "connects": self.connects,
@@ -233,8 +235,21 @@ class Upstream:
         """轻量探测：TCP（或 TLS）握手延迟。direct 不探测。"""
         self.checks += 1
         if self.type == "direct":
+            anchor = str(self.cfg.health.get("direct_probe") or "223.5.5.5:443")
+            host, _, port_text = anchor.rpartition(":")
+            started = time.monotonic()
+            try:
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection(host, int(port_text or 443), limit=2**16),
+                    float(self.cfg.health.get("timeout", 4.0)))
+                writer.close()
+                elapsed = time.monotonic() - started
+                self.latency = (elapsed if self.latency is None
+                                else self.latency * 0.7 + elapsed * 0.3)
+            except Exception:  # noqa: BLE001
+                pass
             self.healthy = True
-            return None
+            return self.latency
         health_timeout = float(self.cfg.health.get("timeout", 4.0))
         probe_target = (self.spec.tls or {}).get("probe_target")
         started = time.monotonic()
@@ -289,6 +304,10 @@ class Upstream:
             self.blocked_until = time.monotonic() + float(
                 self.cfg.health.get("cooldown", 20.0)
             )
+
+    def record_connect(self, seconds: float) -> None:
+        """用真实拨号耗时更新 EWMA —— 比健康探测更贴近用户实际感受。"""
+        self.ewma = seconds if self.ewma is None else self.ewma * 0.7 + seconds * 0.3
 
     def mark_success(self) -> None:
         self.fails = 0

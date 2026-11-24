@@ -610,9 +610,11 @@ def cmd_latency(args) -> int:
     setup_logging("warning")
     sites = args.hosts or latency.DEFAULT_SITES
     paths = tuple(p.strip() for p in (args.paths or "direct,proxy").split(",") if p.strip())
+    from .resolver import Resolver
+
     rows = asyncio.run(latency.matrix(
         sites, proxy_port=cfg.socks5.port, count=args.count, paths=paths,
-        concurrency=args.concurrency))
+        concurrency=args.concurrency, resolver=Resolver(cfg.dns)))
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, indent=2))
     else:

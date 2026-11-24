@@ -27,7 +27,7 @@ class Resolver:
     def __init__(self, dns_cfg: dict | None = None):
         cfg = dns_cfg or {}
         self.mode = str(cfg.get("mode", "system")).lower()
-        self.doh_url = str(cfg.get("doh_url") or "https://1.1.1.1/dns-query")
+        self.doh_url = str(cfg.get("doh_url") or "https://dns.alidns.com/dns-query")
         self.cache_ttl = float(cfg.get("cache_ttl", 300))
         self.timeout = float(cfg.get("timeout", DOH_TIMEOUT))
         self._cache: dict[tuple[str, int], tuple[float, list[str]]] = {}
@@ -224,19 +224,43 @@ def _parse_dns_answers(data: bytes, rtype: int) -> list[str]:
         return []
 
 
-async def open_any(hosts, port: int, timeout: float, local_addr: str | None = None):
-    """依次对候选地址发起连接，返回第一个成功的 (reader, writer)。"""
-    last_exc: Exception | None = None
-    for host in hosts:
-        try:
-            kwargs = {"limit": 2**20}
-            if local_addr:
-                kwargs["local_addr"] = (local_addr, 0)
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port, **kwargs), timeout
-            )
-            return reader, writer
-        except Exception as exc:  # noqa: BLE001
-            last_exc = exc
-            continue
-    raise ConnectionError(f"所有候选地址均连接失败：{hosts}（最后错误：{last_exc}）")
+async def open_any(hosts, port: int, timeout: float, local_addr: str | None = None,
+                    stagger: float = 0.25):
+    """错峰并发拨号：第 2 个地址晚 250 ms 起跑，谁先连上就用谁。
+
+    逐个串行等待会把“第一个 IP 不通”的代价直接加到每次连接上；
+    错峰并发既保留 IPv4 优先，又不会被单个坏地址拖住。
+    """
+    hosts = list(hosts)
+    if not hosts:
+        raise ConnectionError("没有可用地址")
+    loop = asyncio.get_running_loop()
+
+    async def attempt(host: str, delay: float):
+        if delay:
+            await asyncio.sleep(delay)
+        kwargs = {"limit": 2**20}
+        if local_addr:
+            kwargs["local_addr"] = (local_addr, 0)
+        return await asyncio.wait_for(asyncio.open_connection(host, port, **kwargs), timeout)
+
+    tasks = [loop.create_task(attempt(h, i * stagger)) for i, h in enumerate(hosts)]
+    pending = set(tasks)
+    errors = []
+    try:
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                if task.cancelled():
+                    continue
+                exc = task.exception()
+                if exc is None:
+                    for other in pending:
+                        other.cancel()
+                    return task.result()
+                errors.append(str(exc) or type(exc).__name__)
+        raise ConnectionError(f"所有候选地址均连接失败：{hosts}（{'; '.join(errors[:3])}）")
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()

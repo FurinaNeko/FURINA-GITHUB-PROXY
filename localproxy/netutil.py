@@ -10,7 +10,7 @@ from contextlib import suppress
 log = logging.getLogger("localproxy.net")
 
 MAX_HEAD = 64 * 1024
-CHUNK = 65536
+CHUNK = 262144
 
 
 class ProtocolError(Exception):

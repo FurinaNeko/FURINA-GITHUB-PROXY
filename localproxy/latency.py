@@ -159,6 +159,8 @@ def format_table(rows: list[dict], paths: tuple[str, ...] = ("direct", "proxy"))
         head += f"{'直连 ms':>10}"
     if "proxy" in paths:
         head += f"{'代理 ms':>10}"
+    if "direct" in paths and "proxy" in paths:
+        head += f"{'差值':>8}"
     head += "   状态"
     lines = [head, "-" * (len(head) + 4)]
     for row in rows:
@@ -174,6 +176,9 @@ def format_table(rows: list[dict], paths: tuple[str, ...] = ("direct", "proxy"))
             line += f"{value:>10.0f}" if value else f"{'—':>10}"
             if not row.get("proxy_ok"):
                 notes.append("代理失败")
+        if "direct" in paths and "proxy" in paths:
+            d, p = row.get("direct"), row.get("proxy")
+            line += f"{(p - d):>+8.0f}" if (d and p) else f"{'—':>8}"
         fastest = [v for v in (row.get("direct"), row.get("proxy")) if v]
         tail = "OK" if fastest else "FAIL"
         if notes:
