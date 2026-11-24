@@ -674,6 +674,7 @@ class SetupGui:
         self.tr = tr
         self.path_var = None
         self.log_text = None
+        self._result = None
         self.build()
 
     # ------------------------------------------------------------------ 构建
@@ -716,11 +717,11 @@ class SetupGui:
         tk.Label(head, text=tr("headline"), bg="#FFF7F9", fg="#3A2E33",
                  font=("Microsoft YaHei UI", 15, "bold")).grid(row=0, column=1, sticky="w")
         tk.Label(head, text=tr("subtitle"), bg="#FFF7F9", fg="#8A7A80",
-                 font=("Microsoft YaHei UI", 9), wraplength=430, justify="left").grid(
+                 font=("Microsoft YaHei UI", 9), wraplength=380, justify="left").grid(
                      row=1, column=1, sticky="w")
+        short_link = (meta.get("project_url") or GITHUB_URL).replace("https://github.com/", "")
         self.link_label = tk.Label(
-            head, text=(meta.get("project_url") or GITHUB_URL).replace("https://", ""),
-            bg="#FFF7F9", fg="#1F6FEB", cursor="hand2",
+            head, text=short_link, bg="#FFF7F9", fg="#1F6FEB", cursor="hand2",
             font=("Microsoft YaHei UI", 9, "underline"))
         self.link_label.grid(row=2, column=1, sticky="w", pady=(2, 0))
         self.link_label.bind(
@@ -735,7 +736,7 @@ class SetupGui:
         self.lang_var = tk.StringVar(
             value=next((x["label"] for x in tr.langs if x["code"] == tr.lang), "English"))
         combo = ttk.Combobox(lang_row, values=[x["label"] for x in tr.langs],
-                             state="readonly", width=10, textvariable=self.lang_var)
+                             state="readonly", width=9, textvariable=self.lang_var)
         combo.pack(side="left")
         combo.bind("<<ComboboxSelected>>", self._on_language)
         make_sponsor_button(
@@ -824,29 +825,47 @@ class SetupGui:
 
     # ------------------------------------------------------------------ 动作
     def task(self, kind: str):
+        """后台线程只写结果，UI 更新一律回到主线程做（Tk 不是线程安全的）。"""
         import threading
 
+        # Tk 变量只能在主线程读，先全部取出来再交给工作线程
+        opts = {
+            "dir": Path(self.path_var.get()),
+            "desktop": bool(self.v_desktop.get()),
+            "ca": bool(self.v_ca.get()),
+            "hosts": bool(self.v_hosts.get()),
+            "autostart": bool(self.v_auto.get()),
+            "start": bool(self.v_start.get()),
+        }
         self.btn_install.config(state="disabled")
         self.btn_uninstall.config(state="disabled")
         self._write("…")
+        self._result = None
 
         def work():
             try:
-                inst = Installer(Path(self.path_var.get()), Log())
+                inst = Installer(opts["dir"], Log())
                 if kind == "install":
                     ok = inst.install(
-                        desktop=self.v_desktop.get(), ca=self.v_ca.get(),
-                        hosts=self.v_hosts.get(), autostart=self.v_auto.get(),
-                        start_now=self.v_start.get(),
+                        desktop=opts["desktop"], ca=opts["ca"], hosts=opts["hosts"],
+                        autostart=opts["autostart"], start_now=opts["start"],
                     )
                 else:
-                    ok = inst.uninstall(remove_ca=self.v_ca.get())
-                self.root.after(0, lambda: self.finish(ok))
+                    ok = inst.uninstall(remove_ca=opts["ca"])
+                self._result = (bool(ok), "")
             except Exception as exc:  # noqa: BLE001
-                message = str(exc)
-                self.root.after(0, lambda: self.finish(False, message))
+                self._result = (False, str(exc))
 
         threading.Thread(target=work, daemon=True).start()
+        self.root.after(200, self._poll_result)
+
+    def _poll_result(self):
+        if self._result is None:
+            self.root.after(200, self._poll_result)
+            return
+        ok, error = self._result
+        self._result = None
+        self.finish(ok, error)
 
     def finish(self, ok: bool, error: str = ""):
         self.btn_install.config(state="normal")
@@ -873,6 +892,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start", action="store_true")
     parser.add_argument("--uninstall", action="store_true")
     parser.add_argument("--no-popup", action="store_true")
+    parser.add_argument("--gui-selftest", default="", metavar="DIR",
+                        help="无人值守跑一遍图形界面安装流程（用于打包后自检）")
     args = parser.parse_args(argv)
 
     target = Path(args.dir) if args.dir else default_dir()
@@ -903,8 +924,38 @@ def main(argv: list[str] | None = None) -> int:
         "hosts": args.hosts, "autostart": args.autostart, "start": args.start,
         "no_popup": args.no_popup,
     }
+    import tkinter as tk
+
     root = tk.Tk()
-    SetupGui(root, Installer(target, log), defaults, tr)
+    gui = SetupGui(root, Installer(target, log), defaults, tr)
+
+    if args.gui_selftest:
+        import tkinter.ttk as ttk
+
+        report = state_dir() / "selftest.log"
+        lines = [f"frozen={getattr(sys, 'frozen', False)}",
+                 f"ttk.Combobox={hasattr(ttk, 'Combobox')}"]
+
+        def poll(tries=0):
+            text = gui.log_text.get("1.0", "end")
+            done = any(k in text for k in ("finished", "not completed", "—— 完成 ——", "未成功"))
+            if not done and tries < 300:
+                root.after(200, poll, tries + 1)
+                return
+            ok = "finished" in text or "—— 完成 ——" in text
+            lines.append(f"gui_install={'OK' if ok else 'FAILED'}")
+            lines.append("tail=" + " | ".join(text.strip().splitlines()[-3:]))
+            report.write_text("\n".join(lines), encoding="utf-8")
+            root.destroy()
+
+        def start():
+            gui.task("install")
+            poll()
+
+        root.after(400, start)
+        root.mainloop()
+        return 0
+
     root.mainloop()
     return 0
 
