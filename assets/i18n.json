@@ -396,7 +396,9 @@
       "sponsor_title": "Support the author",
       "sponsor_head": "Scan to buy the author a coffee",
       "sponsor_hint": "WeChat Pay recommended",
-      "sponsor_close": "Close"
+      "sponsor_close": "Close",
+      "mkdir_ok": "Folder created: {path}",
+      "mkdir_fail": "Cannot create folder: {error}"
     },
     "zh-CN": {
       "title": "FURINA-GITHUB-PROXY {version} 安装程序",
@@ -430,7 +432,9 @@
       "sponsor_title": "赞助作者",
       "sponsor_head": "扫码请作者喝杯咖啡",
       "sponsor_hint": "推荐使用微信支付",
-      "sponsor_close": "关闭"
+      "sponsor_close": "关闭",
+      "mkdir_ok": "已新建文件夹：{path}",
+      "mkdir_fail": "新建文件夹失败：{error}"
     },
     "ja": {
       "title": "FURINA-GITHUB-PROXY {version} セットアップ",
@@ -464,7 +468,9 @@
       "sponsor_title": "作者を支援",
       "sponsor_head": "スキャンして作者にコーヒーを",
       "sponsor_hint": "WeChat Pay 推奨",
-      "sponsor_close": "閉じる"
+      "sponsor_close": "閉じる",
+      "mkdir_ok": "フォルダーを作成しました: {path}",
+      "mkdir_fail": "フォルダーを作成できません: {error}"
     },
     "ru": {
       "title": "Установка FURINA-GITHUB-PROXY {version}",
@@ -498,7 +504,9 @@
       "sponsor_title": "Поддержать автора",
       "sponsor_head": "Сканируйте, чтобы угостить автора кофе",
       "sponsor_hint": "Рекомендуется WeChat Pay",
-      "sponsor_close": "Закрыть"
+      "sponsor_close": "Закрыть",
+      "mkdir_ok": "Папка создана: {path}",
+      "mkdir_fail": "Не удалось создать папку: {error}"
     }
   }
 }

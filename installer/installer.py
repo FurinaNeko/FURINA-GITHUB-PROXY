@@ -47,6 +47,8 @@ FALLBACK_APP = {
     "done": "—— finished ——", "failed": "—— not completed, see the log ——",
     "language": "Language", "link": "GitHub",
     "log_welcome": "Setup {version}\nDefault folder: {dir}",
+    "mkdir_ok": "Folder created: {path}",
+    "mkdir_fail": "Cannot create folder: {error}",
     "support_title": "Installation complete",
     "support_head": "Installation complete — thanks!",
     "support_qq": "Author QQ: {qq}", "support_tip": "",
@@ -748,13 +750,19 @@ class SetupGui:
         row.grid(row=1, column=0, sticky="ew", padx=16, pady=10)
         ttk.Label(row, text=tr("dir")).pack(side="left")
         self.path_var = tk.StringVar(value=str(self.defaults["dir"]))
-        ttk.Entry(row, textvariable=self.path_var, width=1).pack(
-            side="left", fill="x", expand=True, padx=8)
+        self.dir_entry = ttk.Entry(row, textvariable=self.path_var, width=1)
+        self.dir_entry.pack(side="left", fill="x", expand=True, padx=8)
+        # 改完路径（回车 / 失焦）就自动建目录，避免点安装才发现路径不存在
+        self.dir_entry.bind("<Return>", self._ensure_dir)
+        self.dir_entry.bind("<FocusOut>", self._ensure_dir)
 
         def browse():
-            chosen = filedialog.askdirectory(initialdir=self.path_var.get())
+            # mustexist=False：允许在“选择文件夹”对话框里直接新建
+            chosen = filedialog.askdirectory(initialdir=self.path_var.get(),
+                                             mustexist=False, title=tr("dir"))
             if chosen:
                 self.path_var.set(chosen)
+                self._ensure_dir()
 
         ttk.Button(row, text=tr("browse"), command=browse).pack(side="left")
 
@@ -798,6 +806,20 @@ class SetupGui:
                        dir=self.defaults["dir"]))
         self._write(f"{meta.get('name')} · QQ {meta.get('author_qq')} · "
                     f"{meta.get('project_url')}")
+
+    def _ensure_dir(self, _event=None) -> None:
+        """把路径输入框里的目录建出来（改路径时自动新建文件夹）。"""
+        raw = (self.path_var.get() or "").strip().strip('"')
+        if not raw:
+            return
+        path = Path(raw)
+        try:
+            if not path.exists():
+                path.mkdir(parents=True, exist_ok=True)
+                self._write(self.tr("mkdir_ok", path=path))
+            self.path_var.set(str(path))
+        except OSError as exc:
+            self._write(self.tr("mkdir_fail", error=exc))
 
     def _write(self, message: str):
         if self.log_text is not None:
