@@ -124,12 +124,23 @@ class Resolver:
         return out
 
     def _doh(self, host: str, rtype: int) -> list[str]:
+        """DoH 双格式：先试 JSON API，服务端只支持 wire 格式时自动切过去。
+
+        各家实现并不统一：Cloudflare/Google 认 ?name=&type= 的 JSON，
+        阿里/腾讯的 /dns-query 只吃 RFC8484 的 application/dns-message。
+        """
+        try:
+            return self._doh_json(host, rtype)
+        except urllib.error.HTTPError as exc:
+            if exc.code in (400, 404, 405, 415, 501):
+                return self._doh_wire(host, rtype)
+            raise
+
+    def _doh_json(self, host: str, rtype: int) -> list[str]:
         query = urllib.parse.urlencode({"name": host, "type": "A" if rtype == 1 else "AAAA"})
         url = f"{self.doh_url}?{query}"
         req = urllib.request.Request(
-            url,
-            headers={"Accept": "application/dns-json", "User-Agent": "localproxy/1.0"},
-        )
+            url, headers={"Accept": "application/dns-json", "User-Agent": "localproxy/1.0"})
         with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             payload = json.loads(resp.read().decode("utf-8"))
         if payload.get("Status") not in (0, None):
@@ -142,6 +153,75 @@ class Resolver:
             if data and data not in out:
                 out.append(data)
         return out
+
+    def _doh_wire(self, host: str, rtype: int) -> list[str]:
+        import base64
+
+        query = _build_dns_query(host, rtype)
+        token = base64.urlsafe_b64encode(query).decode().rstrip("=")
+        url = f"{self.doh_url}?dns={token}"
+        req = urllib.request.Request(
+            url,
+            headers={"Accept": "application/dns-message", "User-Agent": "localproxy/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            body = resp.read()
+        return _parse_dns_answers(body, rtype)
+
+
+# --------------------------------------------------------------------------
+# 极简 DNS wire 编解码（DoH 的 RFC8484 路径用）
+# --------------------------------------------------------------------------
+
+def _build_dns_query(host: str, rtype: int) -> bytes:
+    import struct
+
+    qid = 0
+    flags = 0x0100  # RD
+    header = struct.pack(">HHHHHH", qid, flags, 1, 0, 0, 0)
+    qname = b"".join(
+        bytes([len(label)]) + label.encode("ascii")
+        for label in host.rstrip(".").split(".") if label
+    ) + b"\x00"
+    return header + qname + struct.pack(">HH", rtype, 1)
+
+
+def _parse_dns_answers(data: bytes, rtype: int) -> list[str]:
+    import ipaddress
+    import struct
+
+    try:
+        if len(data) < 12:
+            return []
+        _qid, _flags, qd, an, _ns, _ar = struct.unpack(">HHHHHH", data[:12])
+        pos = 12
+        for _ in range(qd):  # 跳过问题区
+            while pos < len(data) and data[pos]:
+                pos += 1 + data[pos]
+            pos += 5
+        out: list[str] = []
+        for _ in range(an):
+            if pos >= len(data):
+                break
+            if data[pos] & 0xC0 == 0xC0:      # 压缩指针
+                pos += 2
+            else:
+                while pos < len(data) and data[pos]:
+                    pos += 1 + data[pos]
+                pos += 1
+            if pos + 10 > len(data):
+                break
+            atype, _aclass, _ttl, rdlen = struct.unpack(">HHIH", data[pos:pos + 10])
+            pos += 10
+            rdata = data[pos:pos + rdlen]
+            pos += rdlen
+            if atype == 1 and rdlen == 4:
+                out.append(str(ipaddress.IPv4Address(rdata)))
+            elif atype == 28 and rdlen == 16:
+                out.append(str(ipaddress.IPv6Address(rdata)))
+        return out
+    except Exception:  # noqa: BLE001
+        return []
 
 
 async def open_any(hosts, port: int, timeout: float, local_addr: str | None = None):

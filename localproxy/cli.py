@@ -145,7 +145,8 @@ async def _check(cfg: Config) -> int:
     return 0 if ok_count == total else 1
 
 
-async def _verify(router: Router, host: str, port: int) -> dict:
+async def _verify(router: Router, host: str, port: int,
+                  timeout: float = 15.0) -> dict:
     started = time.monotonic()
     policy = "?"
     try:
@@ -153,16 +154,16 @@ async def _verify(router: Router, host: str, port: int) -> dict:
         reader, writer, policy, up = await router.dial(host, port, policy)
     except Exception as exc:  # noqa: BLE001
         return {"host": host, "policy": policy, "upstream": "-", "ok": False,
-                "error": str(exc), "ms": 0.0, "status": ""}
+                "error": str(exc) or type(exc).__name__, "ms": 0.0, "status": ""}
     try:
         ctx = ssl.create_default_context()
-        await asyncio.wait_for(writer.start_tls(ctx, server_hostname=host), 15)
+        await asyncio.wait_for(writer.start_tls(ctx, server_hostname=host), timeout)
         writer.write(
             f"HEAD / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: localproxy-check/1.0\r\n"
             "Accept: */*\r\nConnection: close\r\n\r\n".encode()
         )
         await writer.drain()
-        head, _ = await asyncio.wait_for(read_head(reader, 32768), 15)
+        head, _ = await asyncio.wait_for(read_head(reader, 32768), timeout)
         status = head.split(b"\r\n", 1)[0].decode("latin-1", "replace").strip()
         return {
             "host": host,
@@ -175,7 +176,8 @@ async def _verify(router: Router, host: str, port: int) -> dict:
         }
     except Exception as exc:  # noqa: BLE001
         return {"host": host, "policy": policy, "upstream": up.name, "ok": False,
-                "error": str(exc), "ms": (time.monotonic() - started) * 1000, "status": ""}
+                "error": str(exc) or type(exc).__name__,
+                "ms": (time.monotonic() - started) * 1000, "status": ""}
     finally:
         try:
             writer.close()
@@ -248,13 +250,13 @@ async def _probe_through(proxy_port: int, host: str, port: int, kind: str) -> st
             if b" 200 " not in head.split(b"\r\n", 1)[0] + b" ":
                 raise ConnectionError(head.split(b"\r\n", 1)[0].decode("latin-1"))
         ctx = ssl.create_default_context()
-        await asyncio.wait_for(writer.start_tls(ctx, server_hostname=host), 15)
+        await asyncio.wait_for(writer.start_tls(ctx, server_hostname=host), timeout)
         writer.write(
             f"HEAD / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: localproxy-check/1.0\r\n"
             "Connection: close\r\n\r\n".encode()
         )
         await writer.drain()
-        head, _ = await asyncio.wait_for(read_head(reader, 32768), 15)
+        head, _ = await asyncio.wait_for(read_head(reader, 32768), timeout)
         return head.split(b"\r\n", 1)[0].decode("latin-1", "replace").strip()
     finally:
         try:

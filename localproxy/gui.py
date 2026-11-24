@@ -156,6 +156,8 @@ class App:
         self.logq: "queue.Queue[tuple[str, int]]" = queue.Queue()
         self._running = False
         self._lat_result = None
+        self._checking = False
+        self._check_result = None
         self._smoke_shot = smoke_shot
         self._smoke_tab = smoke_tab
 
@@ -774,25 +776,74 @@ class App:
         from .resolver import Resolver
         from .router import Router
 
+        if getattr(self, "_checking", False):
+            return
+        self._checking = True
+        self._check_result = None
+        self.btn_check.config(state="disabled", text=self.tr("lat_running"))
+        self._say(self.tr("msg_checking"), 8000)
+
         def work():
             async def run():
                 router = Router(self.cfg, Resolver(self.cfg.dns))
-                await asyncio.gather(*(u.probe() for u in router.upstreams.values()))
-                return await _verify(router, "github.com", 443)
+                await asyncio.gather(
+                    *(u.probe() for u in router.upstreams.values()),
+                    return_exceptions=True)
+                # 单点超时说明不了问题：按“最可能通”的顺序试几个，第一个通就算通过
+                errors = []
+                for host in ("raw.githubusercontent.com", "api.github.com",
+                             "github.com"):
+                    res = await _verify(router, host, 443, timeout=10)
+                    if res.get("ok"):
+                        res["tried"] = errors
+                        return res
+                    errors.append(f"{host}: {res.get('error') or '-'}")
+                return {"ok": False, "error": " | ".join(errors)}
 
             try:
-                res = self.bridge.call(run(), 30)
+                # 首次连接要等 DoH / 占位上游失败，30s 不够，放宽到 120s
+                self._check_result = self.bridge.call(run(), 120)
             except Exception as exc:  # noqa: BLE001
-                res = {"ok": False, "error": str(exc)}
-            log = logging.getLogger("localproxy")
-            if res.get("ok"):
-                log.info(self.tr("probe_ok", upstream=res.get("upstream"),
-                                 policy=res.get("policy"), ms=f"{res.get('ms', 0):.0f}"))
-            else:
-                log.warning(self.tr("probe_fail", error=res.get("error") or "-"))
+                self._check_result = {"ok": False,
+                                      "error": f"{type(exc).__name__}: {exc}"}
 
         threading.Thread(target=work, daemon=True).start()
-        self._say(self.tr("msg_checking"), 6000)
+        self.root.after(500, self._poll_check)
+
+    def _poll_check(self):
+        """结果只回填 UI：切到日志页 + 弹窗 + 底部常驻提示，确保看得见。"""
+        res = getattr(self, "_check_result", None)
+        if res is None:
+            if getattr(self, "_checking", False):
+                self.root.after(500, self._poll_check)
+            return
+        self._check_result = None
+        self._checking = False
+        self.btn_check.config(state="normal", text=self.tr("selfcheck"))
+
+        tr = self.tr
+        if res.get("ok"):
+            msg = (f"{res.get('host', '')} · "
+                   + tr("probe_ok", upstream=res.get("upstream") or "-",
+                        policy=res.get("policy") or "-",
+                        ms=f"{res.get('ms', 0):.0f}"))
+            if res.get("tried"):
+                msg += f"（{'; '.join(res['tried'])[:120]}）"
+        else:
+            msg = tr("probe_fail",
+                     error=(res.get("error") or res.get("status") or "-")[:300])
+        logger = logging.getLogger("localproxy")
+        logger.info(msg) if res.get("ok") else logger.warning(msg)
+        self._say(msg, 20000)
+        try:
+            self.nb.select(len(self.nb.tabs()) - 1)  # 日志页在最后
+        except Exception:  # noqa: BLE001
+            pass
+        dialog = messagebox.showinfo if res.get("ok") else messagebox.showwarning
+        try:
+            dialog(tr("selfcheck"), msg)
+        except Exception:  # noqa: BLE001
+            pass
 
     # ------------------------------------------------------------------ 证书
     def _store(self):
