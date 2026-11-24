@@ -49,7 +49,23 @@ def setup_logging(level: str) -> None:
 # run
 # --------------------------------------------------------------------------
 
-async def _run(cfg: Config) -> None:
+async def _run(cfg: Config, restart: bool = False) -> None:
+    if restart:
+        # 看护模式：代理异常退出后 3 秒自动拉起（后台常驻用）
+        while True:
+            try:
+                await _run_once(cfg)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                logging.getLogger("localproxy").error("代理退出，3 秒后重启：%s", exc)
+                await asyncio.sleep(3)
+                continue
+            return
+    await _run_once(cfg)
+
+
+async def _run_once(cfg: Config) -> None:
     server = ProxyServer(cfg)
     ports = await server.start()
     banner = [
@@ -77,7 +93,7 @@ def cmd_run(args) -> int:
     cfg = _load(args)
     setup_logging(args.log_level or cfg.log_level)
     try:
-        asyncio.run(_run(cfg))
+        asyncio.run(_run(cfg, restart=bool(getattr(args, "restart", False))))
     except KeyboardInterrupt:
         print("\n已停止。")
     return 0
@@ -272,7 +288,7 @@ def cmd_gen_config(args) -> int:
             "http": {"enabled": True, "host": "127.0.0.1", "port": 7891},
             "api": {"enabled": True, "host": "127.0.0.1", "port": 7892},
         },
-        "dns": {"mode": "doh", "doh_url": "https://1.1.1.1/dns-query",
+        "dns": {"mode": "doh", "doh_url": "https://dns.alidns.com/dns-query",
                 "cache_ttl": 300, "timeout": 5},
         "timeouts": {"connect": 8, "handshake": 10, "idle": 300},
         "health": {"interval": 30, "timeout": 4, "fail_threshold": 2, "cooldown": 20},
@@ -526,6 +542,73 @@ def cmd_accel(args) -> int:
     return 2
 
 
+# --------------------------------------------------------------------------
+# daemon（后台常驻）/ selftest（代理可用性）
+# --------------------------------------------------------------------------
+
+def cmd_daemon(args) -> int:
+    from . import daemon
+
+    action = args.daemon_action
+    if action == "start":
+        info = daemon.start(args.config)
+        if info.get("already"):
+            print(f"已在后台运行：PID {info['pid']}（配置 {info.get('config')}）")
+        else:
+            state = "就绪" if info.get("ready") else "启动中"
+            print(f"已后台启动：PID {info['pid']}  SOCKS5 127.0.0.1:{info.get('socks5_port')}  {state}")
+            print(f"日志：{daemon.log_file()}")
+        return 0
+    if action == "stop":
+        out = daemon.stop()
+        print("已停止" if out.get("stopped") else "当前没有在跑的代理")
+        return 0
+    if action == "restart":
+        daemon.stop()
+        info = daemon.start(args.config)
+        print(f"已重启：PID {info.get('pid')}")
+        return 0
+    info = daemon.status()
+    print(json.dumps(info, ensure_ascii=False, indent=2))
+    return 0 if info.get("running") else 1
+
+
+def cmd_selftest(args) -> int:
+    from . import daemon
+
+    cfg = _load(args)
+    setup_logging("warning")
+    result = asyncio.run(daemon.selftest(
+        cfg, start_if_down=not args.no_start, target=args.target))
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        print(f"目标 {result['target']} · 配置 {result['config']}")
+        for item in result["checks"]:
+            mark = "PASS" if item["ok"] else "FAIL"
+            extra = item.get("status") or item.get("error") or ""
+            print(f"  [{mark}] {item['name']:<14} {item['ms']:>7.0f}ms  {extra[:80]}")
+        print("结论：" + ("代理可用" if result["ok"] else "代理不可用"))
+    return 0 if result["ok"] else 1
+
+
+def cmd_latency(args) -> int:
+    from . import latency
+
+    cfg = _load(args)
+    setup_logging("warning")
+    sites = args.hosts or latency.DEFAULT_SITES
+    paths = tuple(p.strip() for p in (args.paths or "direct,proxy").split(",") if p.strip())
+    rows = asyncio.run(latency.matrix(
+        sites, proxy_port=cfg.socks5.port, count=args.count, paths=paths,
+        concurrency=args.concurrency))
+    if args.json:
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+    else:
+        print(latency.format_table(rows, paths))
+    return 0 if any(r.get("direct") or r.get("proxy") for r in rows) else 1
+
+
 def _load(args) -> Config:
     path = args.config
     try:
@@ -571,7 +654,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_run = sub.add_parser("run", help="启动代理服务（命令行/后台）")
     p_run.add_argument("-c", "--config", default="config.json")
     p_run.add_argument("--log-level")
+    p_run.add_argument("--restart", action="store_true", help="崩溃后自动重启（后台常驻）")
     p_run.set_defaults(func=cmd_run)
+
+    p_daemon = sub.add_parser("daemon", help="后台常驻：start/stop/restart/status")
+    p_daemon.add_argument("daemon_action", choices=["start", "stop", "restart", "status"])
+    p_daemon.add_argument("-c", "--config", default="config.json")
+    p_daemon.set_defaults(func=cmd_daemon)
+
+    p_self = sub.add_parser("selftest", help="自动测试本地代理是否可用")
+    p_self.add_argument("-c", "--config", default="config.json")
+    p_self.add_argument("--target", default="github.com")
+    p_self.add_argument("--no-start", action="store_true", help="不自动拉起后台代理")
+    p_self.add_argument("--json", action="store_true")
+    p_self.set_defaults(func=cmd_selftest)
+
+    p_lat = sub.add_parser("latency", help="网站延迟检测（直连 / 经代理）")
+    p_lat.add_argument("-c", "--config", default="config.json")
+    p_lat.add_argument("--hosts", nargs="*", help="自定义站点，默认内置开发站点清单")
+    p_lat.add_argument("--paths", default="direct,proxy",
+                       help="direct / proxy / direct,proxy")
+    p_lat.add_argument("--count", type=int, default=3, help="每个站点采样次数")
+    p_lat.add_argument("--concurrency", type=int, default=4)
+    p_lat.add_argument("--json", action="store_true")
+    p_lat.set_defaults(func=cmd_latency)
 
     p_check = sub.add_parser("check", help="连通性自检（含真实 TLS 握手）")
     p_check.add_argument("-c", "--config", default="config.json")

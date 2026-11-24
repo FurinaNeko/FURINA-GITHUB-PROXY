@@ -105,6 +105,24 @@ powershell -ExecutionPolicy Bypass -File scripts\apply-hosts.ps1 -Apply
 | `accel hosts/probe/status` | hosts snippet, IP probing, accelerator status |
 | `sysproxy on/off/status` | Windows system proxy |
 
+
+## Background mode & self-test / 后台常驻与自测
+
+```powershell
+FURINA-GITHUB-PROXY.exe daemon start -c config.json   # detached, auto-restart on crash, PID file
+FURINA-GITHUB-PROXY.exe daemon status -c config.json  # running / pid / ready / port
+FURINA-GITHUB-PROXY.exe daemon stop                   # kills the whole process tree
+FURINA-GITHUB-PROXY.exe selftest -c config.json       # SOCKS5 / HTTP CONNECT / plain forward
+FURINA-GITHUB-PROXY.exe latency -c config.json        # per-site latency: direct vs proxy
+FURINA-GITHUB-PROXY.exe latency --hosts github.com huggingface.co --count 3 --json
+```
+
+`daemon start` runs `run --restart`: if the proxy dies it is relaunched 3 s later.
+State lives in `%LOCALAPPDATA%\FURINA-GITHUB-PROXY\` (`proxy.pid`, `proxy.json`, `proxy.log`).
+
+`latency` measures TCP connect + TLS handshake (minimum of N samples) for both the direct
+route and the local proxy, and the UI has a **Latency** tab doing the same with one click.
+
 ## Layout
 
 ```

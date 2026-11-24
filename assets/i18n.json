@@ -102,7 +102,17 @@
       "sponsor_head": "Scan to buy the author a coffee",
       "sponsor_hint": "WeChat Pay recommended · any amount is appreciated",
       "sponsor_qq": "Author QQ: {qq}",
-      "sponsor_close": "Close"
+      "sponsor_close": "Close",
+      "tab_latency": "Latency",
+      "lat_run": "Run latency test",
+      "lat_site": "Site",
+      "lat_direct": "Direct ms",
+      "lat_proxy": "Proxy ms",
+      "lat_state": "State",
+      "lat_hint": "TCP + TLS handshake, min of 3 samples",
+      "lat_running": "testing…",
+      "lat_ok": "ok",
+      "lat_fail": "failed"
     },
     "zh-CN": {
       "title": "FURINA-GITHUB-PROXY",
@@ -188,7 +198,17 @@
       "sponsor_head": "扫码请作者喝杯咖啡",
       "sponsor_hint": "推荐使用微信支付 · 金额随意，心意最重要",
       "sponsor_qq": "作者 QQ：{qq}",
-      "sponsor_close": "关闭"
+      "sponsor_close": "关闭",
+      "tab_latency": "延迟检测",
+      "lat_run": "开始检测",
+      "lat_site": "站点",
+      "lat_direct": "直连 ms",
+      "lat_proxy": "代理 ms",
+      "lat_state": "状态",
+      "lat_hint": "TCP + TLS 握手，取 3 次最小值",
+      "lat_running": "检测中…",
+      "lat_ok": "正常",
+      "lat_fail": "失败"
     },
     "ja": {
       "title": "FURINA-GITHUB-PROXY",
@@ -274,7 +294,17 @@
       "sponsor_head": "スキャンして作者にコーヒーを",
       "sponsor_hint": "WeChat Pay 推奨 · 金額は自由です",
       "sponsor_qq": "作者 QQ: {qq}",
-      "sponsor_close": "閉じる"
+      "sponsor_close": "閉じる",
+      "tab_latency": "遅延",
+      "lat_run": "遅延を測定",
+      "lat_site": "サイト",
+      "lat_direct": "直接 ms",
+      "lat_proxy": "プロキシ ms",
+      "lat_state": "状態",
+      "lat_hint": "TCP + TLS ハンドシェイク（3 回の最小値）",
+      "lat_running": "測定中…",
+      "lat_ok": "正常",
+      "lat_fail": "失敗"
     },
     "ru": {
       "title": "FURINA-GITHUB-PROXY",
@@ -360,7 +390,17 @@
       "sponsor_head": "Сканируйте, чтобы угостить автора кофе",
       "sponsor_hint": "Рекомендуется WeChat Pay · сумма любая",
       "sponsor_qq": "QQ автора: {qq}",
-      "sponsor_close": "Закрыть"
+      "sponsor_close": "Закрыть",
+      "tab_latency": "Задержка",
+      "lat_run": "Измерить задержку",
+      "lat_site": "Сайт",
+      "lat_direct": "Напрямую ms",
+      "lat_proxy": "Прокси ms",
+      "lat_state": "Состояние",
+      "lat_hint": "TCP + TLS, минимум из 3 попыток",
+      "lat_running": "измерение…",
+      "lat_ok": "ок",
+      "lat_fail": "ошибка"
     }
   },
   "installer": {

@@ -155,6 +155,7 @@ class App:
         self.ports: dict[str, int] = {}
         self.logq: "queue.Queue[tuple[str, int]]" = queue.Queue()
         self._running = False
+        self._lat_result = None
         self._smoke_shot = smoke_shot
         self._smoke_tab = smoke_tab
 
@@ -165,8 +166,12 @@ class App:
         self.root.after(400, self._pump_logs)
         self.root.after(1200, self._poll_stats)
         if smoke_shot:
-            self.root.after(1200, lambda: self._select_tab(smoke_tab))
-            self.root.after(1900, lambda: self._take_shot(smoke_shot))
+            self.root.after(600, lambda: self._select_tab(smoke_tab))
+            if smoke_tab == 1:
+                self.root.after(900, self.run_latency)
+                self.root.after(3200, lambda: self._take_shot(smoke_shot))
+            else:
+                self.root.after(1900, lambda: self._take_shot(smoke_shot))
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
     @staticmethod
@@ -291,6 +296,7 @@ class App:
         self.nb = ttk.Notebook(self.root)
         self.nb.pack(fill="both", expand=True, padx=18, pady=(8, 4))
         self._build_upstreams_tab(self.nb)
+        self._build_latency_tab(self.nb)
         self._build_accel_tab(self.nb)
         self._build_log_tab(self.nb)
 
@@ -319,6 +325,60 @@ class App:
         self.tree.pack(fill="both", expand=True, padx=4, pady=6)
         ttk.Label(frame, text=tr("tip_upstreams"), style="Sub.TLabel").pack(
             anchor="w", padx=6, pady=(0, 4))
+
+    def _build_latency_tab(self, nb):
+        tr = self.tr
+        frame = ttk.Frame(nb)
+        nb.add(frame, text=tr("tab_latency"))
+        bar = ttk.Frame(frame)
+        bar.pack(fill="x", padx=4, pady=(8, 4))
+        ttk.Button(bar, text=tr("lat_run"), command=self.run_latency).pack(side="left", padx=4)
+        ttk.Label(bar, text=tr("lat_hint"), style="Sub.TLabel").pack(side="left", padx=8)
+        cols = ("site", "direct", "proxy", "state")
+        self.lat_tree = ttk.Treeview(frame, columns=cols, show="headings", height=8)
+        for key, label, width in (("site", tr("lat_site"), 300),
+                                  ("direct", tr("lat_direct"), 110),
+                                  ("proxy", tr("lat_proxy"), 110),
+                                  ("state", tr("lat_state"), 120)):
+            self.lat_tree.heading(key, text=label)
+            self.lat_tree.column(key, width=width, anchor="w")
+        self.lat_tree.pack(fill="both", expand=True, padx=4, pady=4)
+
+    def run_latency(self):
+        """延迟检测跑到后台事件循环里，结果用轮询回填，绝不跨线程碰 Tk。"""
+        from .latency import DEFAULT_SITES, matrix
+
+        sites = list(DEFAULT_SITES)
+        self.lat_tree.delete(*self.lat_tree.get_children())
+        for site in sites:
+            self.lat_tree.insert("", "end",
+                                 values=(site, "…", "…", self.tr("lat_running")))
+        self._lat_result = None
+        cfg = self.cfg
+
+        async def job():
+            # 只写字段，不碰 Tk（跨线程）
+            self._lat_result = await matrix(sites, proxy_port=cfg.socks5.port,
+                                            count=2, concurrency=8, timeout=5.0)
+
+        self.bridge.submit(job())
+        self.root.after(500, self._poll_latency)
+
+    def _poll_latency(self):
+        rows = getattr(self, "_lat_result", None)
+        if rows is None:
+            self.root.after(500, self._poll_latency)
+            return
+        self._lat_result = None
+        tr = self.tr
+        self.lat_tree.delete(*self.lat_tree.get_children())
+        for row in rows:
+            direct = f"{row['direct']:.0f}" if row.get("direct") else "—"
+            proxy = f"{row['proxy']:.0f}" if row.get("proxy") else "—"
+            state = tr("lat_ok") if (row.get("direct_ok") or row.get("proxy_ok")) \
+                else tr("lat_fail")
+            self.lat_tree.insert("", "end",
+                                 values=(row["host"], direct, proxy, state))
 
     def _build_accel_tab(self, nb):
         tr = self.tr

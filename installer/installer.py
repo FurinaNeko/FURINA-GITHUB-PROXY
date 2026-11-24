@@ -64,7 +64,7 @@ TEMPLATE_CONFIG = {
         "http": {"enabled": True, "host": "127.0.0.1", "port": 7891},
         "api": {"enabled": True, "host": "127.0.0.1", "port": 7892},
     },
-    "dns": {"mode": "doh", "doh_url": "https://1.1.1.1/dns-query",
+    "dns": {"mode": "doh", "doh_url": "https://dns.alidns.com/dns-query",
             "cache_ttl": 300, "timeout": 3},
     "timeouts": {"connect": 8, "handshake": 10, "idle": 300},
     "health": {"interval": 30, "timeout": 4, "fail_threshold": 2, "cooldown": 20},
