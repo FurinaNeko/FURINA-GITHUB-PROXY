@@ -46,6 +46,16 @@ TEXT_SUFFIX = {".py", ".md", ".json", ".ps1", ".spec", ".txt", ".yml", ".yaml",
                ".gitignore", ".pem", ""}
 
 
+def _read_json(path: Path, fallback: dict) -> dict:
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+        if isinstance(data, dict):
+            return {**fallback, **data}
+    except Exception:  # noqa: BLE001
+        pass
+    return dict(fallback)
+
+
 def export() -> list[Path]:
     if EXPORT.exists():
         shutil.rmtree(EXPORT)
@@ -101,9 +111,15 @@ def main(argv=None) -> int:
     parser.add_argument("--repo", default="FURINA-GITHUB-PROXY")
     parser.add_argument("--branch", default="main")
     parser.add_argument("--release", default="dist/FURINA-GITHUB-PROXY-Setup.exe")
-    parser.add_argument("--tag", default="v1.1.0")
+    parser.add_argument("--tag", default="")
     parser.add_argument("--skip-release", action="store_true")
     args = parser.parse_args(argv)
+
+    # 版本号统一从 assets/about.json 读，避免提交信息与发布标签打架
+    meta = _read_json(ROOT / "assets" / "about.json", {})
+    version = str(meta.get("version") or "1.1.0")
+    if not args.tag:
+        args.tag = f"v{version}"
 
     token = os.environ.get("GH_TOKEN")
     if not token:
@@ -159,7 +175,7 @@ def main(argv=None) -> int:
     code, ref = api("GET", f"{repo_api}/git/ref/heads/{args.branch}", token)
     parents = [ref["object"]["sha"]] if code == 200 else []
     code, commit = api("POST", f"{repo_api}/git/commits", token, {
-        "message": "feat: FURINA-GITHUB-PROXY 1.0.0\n\n"
+        "message": f"feat: FURINA-GITHUB-PROXY {version}\n\n"
                    "SOCKS5/HTTP local proxy, rule routing, DoH resolver, "
                    "trojan/http/socks5 upstreams, local-CA accelerator, "
                    "Tkinter UI (en/zh-CN/ja/ru), per-user installer.",
@@ -191,7 +207,7 @@ def main(argv=None) -> int:
     if code != 200:
         code, rel = api("POST", f"{repo_api}/releases", token, {
             "tag_name": args.tag,
-            "name": f"FURINA-GITHUB-PROXY {args.tag}",
+            "name": f"FURINA-GITHUB-PROXY {version}",
             "target_commitish": args.branch,
             "body": ("Windows installer — no Python required, per-user install.\n\n"
                      "- SOCKS5 + HTTP local proxy with rule routing\n"
